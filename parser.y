@@ -71,7 +71,7 @@ bool is_i_declared = false;
 program:
     functions
     {
-        fprintf(outfile, "#include <stdio.h>\n#include <stdlib.h>\n\n%s\n", $1);
+        fprintf(outfile, "#include <stdio.h>\n#include <stdlib.h>\n#include <stdbool.h>\n\n%s\n", $1);
         fclose(outfile);
     }
 ;
@@ -278,6 +278,24 @@ statement:
             YYABORT;
         }
     }
+    | IF '(' expr ')' '{' statements '}' %prec UMINUS
+    {
+        char* if_stmt = new char[strlen($3.code) + strlen($6) + 20];
+        sprintf(if_stmt, "if (%s) {\n%s}\n", $3.code, $6);
+        $$ = if_stmt;
+    }
+    | IF '(' expr ')' '{' statements '}' ELSE '{' statements '}' %prec UMINUS
+    {
+        char* if_else_stmt = new char[strlen($3.code) + strlen($6) + strlen($10) + 30];
+        sprintf(if_else_stmt, "if (%s) {\n%s} else {\n%s}\n", $3.code, $6, $10);
+        $$ = if_else_stmt;
+    }
+    | WHILE '(' expr ')' '{' statements '}'
+    {
+        char* while_stmt = new char[strlen($3.code) + strlen($6) + 20];
+        sprintf(while_stmt, "while (%s) {\n%s}\n", $3.code, $6);
+        $$ = while_stmt;
+    }
     | IDENTIFIER '(' ')' ';'
     {
         $$ = new char[strlen($1) + 5];
@@ -413,6 +431,62 @@ expr:
         strcpy($$.code, $1);
         $$.type = new char[7];
         strcpy($$.type, "string");
+    }
+    | TRUE
+    {
+        $$.code = new char[6];
+        strcpy($$.code, "true");
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | FALSE
+    {
+        $$.code = new char[6];
+        strcpy($$.code, "false");
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr '<' expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 4];
+        sprintf($$.code, "%s < %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr '>' expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 4];
+        sprintf($$.code, "%s > %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr EQ expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 5];
+        sprintf($$.code, "%s == %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr NE expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 5];
+        sprintf($$.code, "%s != %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr LE expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 5];
+        sprintf($$.code, "%s <= %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
+    }
+    | expr GE expr
+    {
+        $$.code = new char[strlen($1.code) + strlen($3.code) + 5];
+        sprintf($$.code, "%s >= %s", $1.code, $3.code);
+        $$.type = new char[5];
+        strcpy($$.type, "bool");
     }
     | IDENTIFIER
     {
