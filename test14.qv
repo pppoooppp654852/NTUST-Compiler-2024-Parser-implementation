@@ -1,0 +1,5 @@
+fun main () {
+    var l: int[5];
+    l = {1, 2, 3, 4, 5};   // Assign a vector with 5 integers 1, 2, 3, 4, 5 in order
+    println(l);
+}

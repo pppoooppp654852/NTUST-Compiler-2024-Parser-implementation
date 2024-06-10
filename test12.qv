@@ -1,0 +1,6 @@
+fun main () {
+    var arr1: int[5] = {1, 2, 3, 4, 5};
+    var arr2: int[5];
+    arr2 = arr1; // assign 1D array to the lhs 1D array
+    println(arr2);
+}

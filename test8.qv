@@ -1,0 +1,19 @@
+fun main () {
+	// what is this?
+	var vi1: real[5] = {5, 3, 4, 1, 2};
+	var vi2: real[5] = {2, -2, 4, 3.5, 1.2};
+	var arr1: int[3] = {1, 2, 3};
+	var arr2: int[3] = {3, 2, 1};
+
+	println( vi1 + vi2 );
+	println( arr1 + arr2 );
+
+	println( vi1 - vi2 );
+	println( arr1 - arr2 );
+
+	println( vi1 * vi2 );
+	println( arr1 * arr2 );
+
+	println( vi1 / vi2 );
+	println( arr1 / arr2 );
+}
