@@ -26,11 +26,11 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
-# Generate parser and lexer
+# Generate parser and scanner
 parser.tab.c parser.tab.h: parser.y
 	$(YACC) -d $<
 	
-lex.yy.c: lexer.l parser.tab.h
+lex.yy.c: scanner.l parser.tab.h
 	$(LEX) $<
 
 # Clean up object files and executable

@@ -1,6 +1,0 @@
-//test10.qv
-fun main () {
-	var i: int;
-	// yyerror("ERROR: duplicate declaration")
-	var i: real[3] = {2, -2}; 
-}

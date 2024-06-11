@@ -1,7 +1,0 @@
-//test7.qv
-fun main () {
-	var vi1: real[5] = {5, 3, 4, 1, 2};
-	var arr1: int[3] = {1, 2, 3};
-    println(vi1);
-    print(arr1);
-}

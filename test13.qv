@@ -1,8 +1,0 @@
-//test13.qv
-fun main () {
-    var arr1: int[5] = {1, 2, 3, 4, 5};
-    var arr2: int[6];
-    // ERROR: mismatched size
-    arr2 = arr1; 
-    println(arr2);
-}

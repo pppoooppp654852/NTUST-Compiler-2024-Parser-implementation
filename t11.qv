@@ -1,14 +1,13 @@
-//test16.qv
 fun main () {
-    var i: int = 10;
-    var j: int = 5;
-    if (i >= j) {
+    var a: bool = true;
+    var b: bool = false;
+    if (a == b) {
         println("true");
     } else {
         println("false");
     }
 
-    if (true) {
+    if (a) {
         println("true");
     }
 }

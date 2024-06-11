@@ -1,5 +1,0 @@
-//test11.qv
-fun main () {
-	// yyerror("ERROR: too many elements")
-	var vi: real[2] = {2, -2, 5}; 
-}

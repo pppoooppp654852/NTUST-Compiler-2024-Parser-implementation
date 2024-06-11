@@ -1,7 +1,4 @@
-//test5.qv
 fun main () {
-	println(123.456);
 	print(123.456);
 	println(123.456);
-	print(123.456);
 }

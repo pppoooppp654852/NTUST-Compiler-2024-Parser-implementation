@@ -1,7 +1,0 @@
-//test14.qv
-fun main () {
-    var l: int[5];
-    // Assign a vector with 5 integers
-    l = {1, 2, 3, 4, 5};   
-    println(l);
-}
