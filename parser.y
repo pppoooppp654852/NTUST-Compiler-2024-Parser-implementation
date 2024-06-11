@@ -5,7 +5,6 @@
 #include <iostream>
 #include <map>
 
-void yyerror(const char *s, int line);
 void yyerror(const char *s);
 int yylex(void);
 
@@ -18,8 +17,6 @@ struct VectorInfo {
     int length;
 };
 std::map<std::string, VectorInfo> symbol_table;
-
-extern int lineNum;
 
 int temp_count = 0;
 bool is_i_declared = false;
@@ -48,8 +45,8 @@ bool is_i_declared = false;
 %token <cval> CHAR_LITERAL
 %token <sval> STRING_LITERAL
 %token <str> IDENTIFIER
-%token FUN VAR VAL BOOL CHAR INT REAL STRING TRUE FALSE CLASS IF ELSE FOR WHILE DO SWITCH CASE RET PRINTLN PRINT
-%token EQ NE LE GE AND OR
+%token FUN VAR BOOL CHAR INT REAL STRING TRUE FALSE IF ELSE WHILE RET PRINTLN PRINT
+%token EQ NE LE GE
 
 %type <expr_val> expr
 %type <expr_list_val> expr_list
@@ -63,7 +60,7 @@ bool is_i_declared = false;
 
 %left '+' '-'
 %left '*' '/'
-%left '#'
+%left '^'
 %nonassoc UMINUS
 
 %%
@@ -242,11 +239,11 @@ statement:
                     $$ = new char[strlen(process) + 1];
                     strcpy($$, process);
                 } else {
-                    yyerror("Mismatched types or lengths in array assignment", lineNum);
+                    yyerror("Mismatched types or lengths in array assignment");
                     YYABORT;
                 }
             } else {
-                yyerror("Right-hand side must be an array in array assignment", lineNum);
+                yyerror("Right-hand side must be an array in array assignment");
                 YYABORT;
             }
         } else {
@@ -270,11 +267,11 @@ statement:
                 $$ = new char[strlen(declare_temp) + strlen(process) + 1];
                 sprintf($$, "%s%s", declare_temp, process);
             } else {
-                yyerror("Initializer list too long for array", lineNum);
+                yyerror("Initializer list too long for array");
                 YYABORT;
             }
         } else {
-            yyerror("Left-hand side must be an array in array assignment", lineNum);
+            yyerror("Left-hand side must be an array in array assignment");
             YYABORT;
         }
     }
@@ -318,12 +315,12 @@ variable_declaration:
         if (it != symbol_table.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
 
         if (strcmp($4, "string") == 0) { 
-            yyerror("String variables must be initialized", lineNum);
+            yyerror("String variables must be initialized");
             YYABORT;
         }
 
@@ -338,7 +335,7 @@ variable_declaration:
         if (it != symbol_table.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
 
@@ -359,7 +356,7 @@ variable_declaration:
         if (it != symbol_table.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
 
@@ -375,14 +372,14 @@ variable_declaration:
         if (it != symbol_table.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
 
         if ($6 < $10.length) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Too many elements for %s", $2);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
         // Insert into symbol table with vector info
@@ -512,7 +509,7 @@ expr:
         } else {
             char* error = new char[strlen($1) + 20];
             sprintf(error, "Undeclared variable %s", $1);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
     }
@@ -529,11 +526,11 @@ expr:
         } else {
             char* error = new char[strlen($1) + 20];
             sprintf(error, "Undeclared variable %s", $1);
-            yyerror(error, lineNum);
+            yyerror(error);
             YYABORT;
         }
     }
-    | expr '#' expr
+    | expr '^' expr
     {
         // Inner product
         auto it1 = symbol_table.find($1.code);
@@ -559,11 +556,11 @@ expr:
                 $$.process = new char[strlen(process) + 1];
                 $$.process = process;
             } else {
-                yyerror("Mismatched types or lengths in vector addition", lineNum);
+                yyerror("Mismatched types or lengths in vector addition");
                 YYABORT;
             }
         } else {
-            yyerror("Inner product on non-array object", lineNum);
+            yyerror("Inner product on non-array object");
             YYABORT;
         }
     }
@@ -597,7 +594,7 @@ expr:
                 $$.process = new char[strlen(process) + 1];
                 strcpy($$.process, process);
             } else {
-                yyerror("Mismatched types or lengths in vector addition", lineNum);
+                yyerror("Mismatched types or lengths in vector addition");
                 YYABORT;
             }
             
@@ -645,7 +642,7 @@ expr:
                 $$.process = new char[strlen(process) + 1];
                 strcpy($$.process, process);
             } else {
-                yyerror("Mismatched types or lengths in vector addition", lineNum);
+                yyerror("Mismatched types or lengths in vector addition");
                 YYABORT;
             }
             
@@ -692,7 +689,7 @@ expr:
                 $$.process = new char[strlen(process) + 1];
                 strcpy($$.process, process);
             } else {
-                yyerror("Mismatched types or lengths in vector addition", lineNum);
+                yyerror("Mismatched types or lengths in vector addition");
                 YYABORT;
             }
             
@@ -739,13 +736,13 @@ expr:
                 $$.process = new char[strlen(process) + 1];
                 strcpy($$.process, process);
             } else {
-                yyerror("Mismatched types or lengths in vector addition", lineNum);
+                yyerror("Mismatched types or lengths in vector addition");
                 YYABORT;
             }
             
         } else {
             if ($3.code[0] == '0') {
-                yyerror("Division by zero", lineNum);
+                yyerror("Division by zero");
                 YYABORT;
             }
             $$.code = new char[strlen($1.code) + strlen($3.code) + 4];
@@ -784,14 +781,9 @@ expr:
 %%
 
 extern FILE* yyin;
-
-void yyerror(const char *s, int line) {
-    fprintf(stderr, "Error on line %d: %s\n", line, s);
-    fprintf(outfile, "Error on line %d: %s\n", line, s);
-}
-
 void yyerror(const char *s) {
-    yyerror(s, lineNum);  // Call the other yyerror with the current line number
+    fprintf(stderr, "Error : %s\n", s);
+    fprintf(outfile, "Error : %s\n", s);
 }
 
 int main(int argc, char *argv[]) {
