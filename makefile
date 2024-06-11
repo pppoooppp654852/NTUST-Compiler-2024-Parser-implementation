@@ -13,7 +13,7 @@ SRCS = lex.yy.c parser.tab.c
 OBJS = $(SRCS:.c=.o)
 
 # Executable name
-TARGET = main
+TARGET = parser
 
 # Default target
 all: $(TARGET)
