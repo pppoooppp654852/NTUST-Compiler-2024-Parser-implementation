@@ -22,7 +22,7 @@ struct VInfo {
 std::map<std::string, VInfo> symbol_table;
 
 int tmpCounter = 0;
-bool is_i_declared = false;
+bool i_flag = false;
 %}
 
 %union {
@@ -53,7 +53,6 @@ bool is_i_declared = false;
 %type <expressionValue> expr
 %type <expressionListValue> expr_list
 
-%type <string> functions
 %type <string> function
 %type <string> statements
 %type <string> variable_declaration
@@ -67,39 +66,19 @@ bool is_i_declared = false;
 
 %%
 
-program:
-    functions
+file:
+    function
     {
         fprintf(outputFile, "#include <stdio.h>\n#include <stdlib.h>\n#include <stdbool.h>\n\n%s\n", $1);
         fclose(outputFile);
     }
 ;
 
-functions:
-    /* Define your functions rule here */
-    function
-    {
-        $$ = new char[strlen($1) + 1];
-        strcpy($$, $1);
-    }
-    | functions function
-    {
-        $$ = new char[strlen($1) + strlen($2) + 1];
-        strcpy($$, $1);
-        strcat($$, $2);
-    }
-;
-
 function:
     FUN IDENTIFIER '(' ')' '{' statements '}' 
     {
-        if (strcmp($2, "main") == 0) {
-            $$ = new char[strlen($2) + strlen($6) + 20];
-            sprintf($$, "int %s() {\n%s}\n\n", $2, $6);
-        } else {
-            $$ = new char[strlen($2) + strlen($6) + 20];
-            sprintf($$, "void %s() {\n%s}\n\n", $2, $6);
-        }
+        $$ = new char[strlen($2) + strlen($6) + 100];
+        sprintf($$, "int %s() {\n%s}\n\n", $2, $6);
     }
 ;
 
@@ -132,8 +111,8 @@ statement:
             int length = it->second.length;
             print_stmt = new char[200];
             char* for_loop = new char[200];
-            if (!is_i_declared) {
-                is_i_declared = true;
+            if (!i_flag) {
+                i_flag = true;
                 sprintf(for_loop, "int i;\nprintf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
             } else {
                 sprintf(for_loop, "printf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
@@ -184,8 +163,8 @@ statement:
             int length = it->second.length;
             print_stmt = new char[200];
             char* for_loop = new char[200];
-            if (!is_i_declared) {
-                is_i_declared = true;
+            if (!i_flag) {
+                i_flag = true;
                 sprintf(for_loop, "int i;\nprintf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
             } else {
                 sprintf(for_loop, "printf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
@@ -543,8 +522,8 @@ expr:
                 char* temp = new char[10];
                 sprintf(temp, "tmp%d", tmpCounter);
                 char* process = new char[200];
-                if (!is_i_declared) {
-                    is_i_declared = true;
+                if (!i_flag) {
+                    i_flag = true;
                     sprintf(process, "int i;\n%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, temp, length, temp, $1.codeString, $3.codeString);
                 } else {
                     sprintf(process, "%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, temp, length, temp, $1.codeString, $3.codeString);
@@ -579,8 +558,8 @@ expr:
 
                 // Generate the addition process codeString
                 char* process = new char[300 + 20 * length];
-                if (!is_i_declared) {
-                    is_i_declared = true;
+                if (!i_flag) {
+                    i_flag = true;
                     sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
                 } else {
                     sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
@@ -627,8 +606,8 @@ expr:
 
                 // Generate the addition process codeString
                 char* process = new char[300 + 20 * length];
-                if (!is_i_declared) {
-                    is_i_declared = true;
+                if (!i_flag) {
+                    i_flag = true;
                     sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
                 } else {
                     sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
@@ -674,8 +653,8 @@ expr:
 
                 // Generate the addition process codeString
                 char* process = new char[300 + 20 * length];
-                if (!is_i_declared) {
-                    is_i_declared = true;
+                if (!i_flag) {
+                    i_flag = true;
                     sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
                 } else {
                     sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
@@ -721,8 +700,8 @@ expr:
 
                 // Generate the addition process codeString
                 char* process = new char[300 + 20 * length];
-                if (!is_i_declared) {
-                    is_i_declared = true;
+                if (!i_flag) {
+                    i_flag = true;
                     sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
                 } else {
                     sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
