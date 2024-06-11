@@ -19,10 +19,68 @@ struct VInfo {
     std::string type;
     int length;
 };
-std::map<std::string, VInfo> symbol_table;
+std::map<std::string, VInfo> symbolMap;
 
 int tmpCounter = 0;
 bool i_flag = false;
+
+// 用於生成數組打印代碼的函數
+char* generateArrayPrintCode(const char* codeString, const char* typeString, int length, bool newLine) {
+    char* loopStatement = new char[200];
+    char* printStatement;
+    if (!i_flag) {
+        i_flag = true;
+        sprintf(loopStatement, "int i;\nprintf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
+    } else {
+        sprintf(loopStatement, "printf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
+    }
+
+    if (strcmp(typeString, "int") == 0) {
+        strcat(loopStatement, "%%d\", %s[i]);\n}\nprintf(\"}%s\");\n");
+    } else if (strcmp(typeString, "double") == 0) {
+        strcat(loopStatement, "%%f\", %s[i]);\n}\nprintf(\"}%s\");\n");
+    } else if (strcmp(typeString, "char") == 0) {
+        strcat(loopStatement, "%%c\", %s[i]);\n}\nprintf(\"}%s\");\n");
+    } else {
+        strcat(loopStatement, "%%s\", %s[i]);\n}\nprintf(\"}%s\");\n");
+    }
+
+    char* newLineString;
+    if (newLine) {
+        newLineString = "\\n";
+    } else {
+        newLineString = "";
+    }
+    printStatement = new char[strlen(loopStatement) + strlen(codeString) * 2 + strlen(newLineString) + 1];
+    sprintf(printStatement, loopStatement, codeString, codeString, newLineString);
+
+    return printStatement;
+}
+
+// 用於生成標量打印代碼的函數
+char* generateScalarPrintCode(const char* codeString, const char* typeString, bool newLine) {
+    char* printStatement = new char[strlen(codeString) + 50];
+    char* formatString;
+    if (strcmp(typeString, "int") == 0) {
+        formatString = "%%d";
+    } else if (strcmp(typeString, "double") == 0) {
+        formatString = "%%f";
+    } else if (strcmp(typeString, "char") == 0) {
+        formatString = "%%c";
+    } else {
+        formatString = "%%s";
+    }
+
+    char* newLineString;
+    if (newLine) {
+        newLineString = "\\n";
+    } else {
+        newLineString = "";
+    }
+    sprintf(printStatement, "printf(\"%s%s\", %s);\n", formatString, newLineString, codeString);
+
+    return printStatement;
+}
 %}
 
 %union {
@@ -69,6 +127,7 @@ bool i_flag = false;
 file:
     function
     {
+        // 將生成的C代碼寫入輸出文件，並添加必要的頭文件
         fprintf(outputFile, "#include <stdio.h>\n#include <stdlib.h>\n#include <stdbool.h>\n\n%s\n", $1);
         fclose(outputFile);
     }
@@ -77,6 +136,7 @@ file:
 function:
     FUN IDENTIFIER '(' ')' '{' statements '}' 
     {
+        // 構造main函數的代碼
         $$ = new char[strlen($2) + strlen($6) + 100];
         sprintf($$, "int %s() {\n%s}\n\n", $2, $6);
     }
@@ -104,185 +164,120 @@ statement:
     }
     | PRINTLN '(' expr ')' ';'
     {
-        char* print_stmt;
-        auto it = symbol_table.find($3.codeString);
-        if (it != symbol_table.end() && it->second.length > 0) {
-            // Array printing logic
-            int length = it->second.length;
-            print_stmt = new char[200];
-            char* for_loop = new char[200];
-            if (!i_flag) {
-                i_flag = true;
-                sprintf(for_loop, "int i;\nprintf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
-            } else {
-                sprintf(for_loop, "printf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
-            }
-
-            if (strcmp($3.typeString, "int") == 0) {
-                strcat(for_loop, "%%d\", %s[i]);\n}\nprintf(\"}\\n\");\n");
-            } else if (strcmp($3.typeString, "double") == 0) {
-                strcat(for_loop, "%%f\", %s[i]);\n}\nprintf(\"}\\n\");\n");
-            } else if (strcmp($3.typeString, "char") == 0) {
-                strcat(for_loop, "%%c\", %s[i]);\n}\nprintf(\"}\\n\");\n");
-            } else {
-                strcat(for_loop, "%%s\", %s[i]);\n}\nprintf(\"}\\n\");\n");
-            }
-
-            print_stmt = new char[strlen(for_loop) + strlen($3.codeString) * 2 + 1];
-            sprintf(print_stmt, for_loop, $3.codeString, $3.codeString);
+        char* printStatement;  // 打印語句
+        auto it = symbolMap.find($3.codeString);
+        if (it != symbolMap.end() && it->second.length > 0) {
+            // 數組打印邏輯
+            printStatement = generateArrayPrintCode($3.codeString, $3.typeString, it->second.length, true);
         } else {
-             // Scalar printing logic
-            print_stmt = new char[strlen($3.codeString) + 50];
-            if (strcmp($3.typeString, "int") == 0) {
-                sprintf(print_stmt, "printf(\"%%d\\n\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "double") == 0) {
-                sprintf(print_stmt, "printf(\"%%f\\n\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "char") == 0) {
-                sprintf(print_stmt, "printf(\"%%c\\n\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "string") == 0) {
-                sprintf(print_stmt, "printf(\"%%s\\n\", %s);\n", $3.codeString);
-            } else {
-                sprintf(print_stmt, "printf(\"%%s\\n\", %s);\n", $3.codeString);
-            }
+            // 標量打印邏輯
+            printStatement = generateScalarPrintCode($3.codeString, $3.typeString, true);
         }
 
         if ($3.processString != NULL) {
-            $$ = new char[strlen($3.processString) + strlen(print_stmt) + 2];
-            sprintf($$, "%s\n%s", $3.processString, print_stmt);
+            $$ = new char[strlen($3.processString) + strlen(printStatement) + 2];
+            sprintf($$, "%s\n%s", $3.processString, printStatement);
         } else {
-            $$ = new char[strlen(print_stmt) + 1];
-            sprintf($$, "%s", print_stmt);
+            $$ = new char[strlen(printStatement) + 1];
+            sprintf($$, "%s", printStatement);
         }
     }
     | PRINT '(' expr ')' ';'
     {
-        char* print_stmt;
-        auto it = symbol_table.find($3.codeString);
-        if (it != symbol_table.end() && it->second.length > 0) {
-            // Array printing logic
-            int length = it->second.length;
-            print_stmt = new char[200];
-            char* for_loop = new char[200];
-            if (!i_flag) {
-                i_flag = true;
-                sprintf(for_loop, "int i;\nprintf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
-            } else {
-                sprintf(for_loop, "printf(\"{\");\nfor (i = 0; i < %d; ++i) {\n    if (i != 0) printf(\", \");\n    printf(\"", length);
-            }
-
-            if (strcmp($3.typeString, "int") == 0) {
-                strcat(for_loop, "%%d\", %s[i]);\n}\nprintf(\"}\");\n");
-            } else if (strcmp($3.typeString, "double") == 0) {
-                strcat(for_loop, "%%f\", %s[i]);\n}\nprintf(\"}\");\n");
-            } else if (strcmp($3.typeString, "char") == 0) {
-                strcat(for_loop, "%%c\", %s[i]);\n}\nprintf(\"}\");\n");
-            } else {
-                strcat(for_loop, "%%s\", %s[i]);\n}\nprintf(\"}\");\n");
-            }
-
-            print_stmt = new char[strlen(for_loop) + strlen($3.codeString) * 2 + 1];
-            sprintf(print_stmt, for_loop, $3.codeString, $3.codeString);
+        char* printStatement;  // 打印語句
+        auto it = symbolMap.find($3.codeString);
+        if (it != symbolMap.end() && it->second.length > 0) {
+            // 數組打印邏輯
+            printStatement = generateArrayPrintCode($3.codeString, $3.typeString, it->second.length, false);
         } else {
-             // Scalar printing logic
-            print_stmt = new char[strlen($3.codeString) + 50];
-            if (strcmp($3.typeString, "int") == 0) {
-                sprintf(print_stmt, "printf(\"%%d\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "double") == 0) {
-                sprintf(print_stmt, "printf(\"%%f\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "char") == 0) {
-                sprintf(print_stmt, "printf(\"%%c\", %s);\n", $3.codeString);
-            } else if (strcmp($3.typeString, "string") == 0) {
-                sprintf(print_stmt, "printf(\"%%s\", %s);\n", $3.codeString);
-            } else {
-                sprintf(print_stmt, "printf(\"%%s\", %s);\n", $3.codeString);
-            }
+            // 標量打印邏輯
+            printStatement = generateScalarPrintCode($3.codeString, $3.typeString, false);
         }
 
         if ($3.processString != NULL) {
-            $$ = new char[strlen($3.processString) + strlen(print_stmt) + 2];
-            sprintf($$, "%s\n%s", $3.processString, print_stmt);
+            $$ = new char[strlen($3.processString) + strlen(printStatement) + 2];
+            sprintf($$, "%s\n%s", $3.processString, printStatement);
         } else {
-            $$ = new char[strlen(print_stmt) + 1];
-            sprintf($$, "%s", print_stmt);
+            $$ = new char[strlen(printStatement) + 1];
+            sprintf($$, "%s", printStatement);
         }
     }
     | expr '=' expr ';'
     {
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
 
-        if (it1 != symbol_table.end() && it1->second.length > 0) { // The left-hand side is an array
-            if (it2 != symbol_table.end() && it2->second.length > 0) { // The right-hand side is also an array
+        if (it1 != symbolMap.end() && it1->second.length > 0) { // 左邊是數組
+            if (it2 != symbolMap.end() && it2->second.length > 0) { // 右邊也是數組
                 if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                    // Arrays match in type and size
-                    char* process = new char[300];
-                    sprintf(process, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it1->second.length, $1.codeString, $3.codeString);
-                    $$ = new char[strlen(process) + 1];
-                    strcpy($$, process);
+                    // 數組類型和大小匹配
+                    char* arrayAssignment = new char[300];
+                    sprintf(arrayAssignment, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it1->second.length, $1.codeString, $3.codeString);
+                    $$ = new char[strlen(arrayAssignment) + 1];
+                    strcpy($$, arrayAssignment);
                 } else {
-                    yyerror("Mismatched types or lengths in array assignment");
+                    yyerror("數組賦值類型或長度不匹配");
                     YYABORT;
                 }
             } else {
-                yyerror("Right-hand side must be an array in array assignment");
+                yyerror("數組賦值右邊必須是數組");
                 YYABORT;
             }
         } else {
-            // Scalar assignment
+            // 標量賦值
             $$ = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
             sprintf($$, "%s = %s;\n", $1.codeString, $3.codeString);
         }
     }
     | expr '=' '{' expr_list '}' ';'
     {
-        auto it = symbol_table.find($1.codeString);
-        if (it != symbol_table.end() && it->second.length > 0) { // The left-hand side is an array
-            if (it->second.length >= $4.length) { // The initializer list fits in the array
-                char* temp = new char[20];
-                sprintf(temp, "tmp_arr%d", tmpCounter);
+        auto it = symbolMap.find($1.codeString);
+        if (it != symbolMap.end() && it->second.length > 0) { // 左邊是數組
+            if (it->second.length >= $4.length) { // 初始化列表適合數組
+                char* tempArrayName = new char[20];
+                sprintf(tempArrayName, "tmp_arr%d", tmpCounter);
                 tmpCounter++;
-                char* declare_temp = new char[30];
-                char* process = new char[300 + strlen($4.codeString)];
-                sprintf(declare_temp, "%s %s[%d] = {%s};\n", $1.typeString, temp, it->second.length, $4.codeString);
-                sprintf(process, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it->second.length, $1.codeString, temp);
-                $$ = new char[strlen(declare_temp) + strlen(process) + 1];
-                sprintf($$, "%s%s", declare_temp, process);
+                char* declareTempArray = new char[30];
+                char* arrayInitialization = new char[300 + strlen($4.codeString)];
+                sprintf(declareTempArray, "%s %s[%d] = {%s};\n", $1.typeString, tempArrayName, it->second.length, $4.codeString);
+                sprintf(arrayInitialization, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it->second.length, $1.codeString, tempArrayName);
+                $$ = new char[strlen(declareTempArray) + strlen(arrayInitialization) + 1];
+                sprintf($$, "%s%s", declareTempArray, arrayInitialization);
             } else {
-                yyerror("Initializer list too long for array");
+                yyerror("初始化列表對數組來說太長");
                 YYABORT;
             }
         } else {
-            yyerror("Left-hand side must be an array in array assignment");
+            yyerror("數組賦值左邊必須是數組");
             YYABORT;
         }
     }
     | IF '(' expr ')' '{' statements '}' %prec UMINUS
     {
-        char* if_stmt = new char[strlen($3.codeString) + strlen($6) + 20];
-        sprintf(if_stmt, "if (%s) {\n%s}\n", $3.codeString, $6);
-        $$ = if_stmt;
+        // 構造if語句
+        char* ifStatement = new char[strlen($3.codeString) + strlen($6) + 20];
+        sprintf(ifStatement, "if (%s) {\n%s}\n", $3.codeString, $6);
+        $$ = ifStatement;
     }
     | IF '(' expr ')' '{' statements '}' ELSE '{' statements '}' %prec UMINUS
     {
-        char* if_else_stmt = new char[strlen($3.codeString) + strlen($6) + strlen($10) + 30];
-        sprintf(if_else_stmt, "if (%s) {\n%s} else {\n%s}\n", $3.codeString, $6, $10);
-        $$ = if_else_stmt;
+        // 構造if-else語句
+        char* ifElseStatement = new char[strlen($3.codeString) + strlen($6) + strlen($10) + 30];
+        sprintf(ifElseStatement, "if (%s) {\n%s} else {\n%s}\n", $3.codeString, $6, $10);
+        $$ = ifElseStatement;
     }
     | WHILE '(' expr ')' '{' statements '}'
     {
-        char* while_stmt = new char[strlen($3.codeString) + strlen($6) + 20];
-        sprintf(while_stmt, "while (%s) {\n%s}\n", $3.codeString, $6);
-        $$ = while_stmt;
+        // 構造while語句
+        char* whileStatement = new char[strlen($3.codeString) + strlen($6) + 20];
+        sprintf(whileStatement, "while (%s) {\n%s}\n", $3.codeString, $6);
+        $$ = whileStatement;
     }
     | IDENTIFIER '(' ')' ';'
     {
+        // 標識符函數調用
         $$ = new char[strlen($1) + 5];
         sprintf($$, "%s();\n", $1);
-    }
-    | RET ';'
-    {
-        $$ = new char[8];
-        strcpy($$, "return;\n");
     }
 ;
 
@@ -292,8 +287,8 @@ variable_declaration:
     VAR IDENTIFIER ':' type ';'
     {
         // Check if the variable has already been declared
-        auto it = symbol_table.find($2);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($2);
+        if (it != symbolMap.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
             yyerror(error);
@@ -305,22 +300,22 @@ variable_declaration:
             YYABORT;
         }
 
-        symbol_table[$2] = { $4, -1 };
+        symbolMap[$2] = { $4, -1 };
         $$ = new char[strlen($2) + strlen($4) + 10];
         sprintf($$, "%s %s;\n", $4, $2);
     }
     | VAR IDENTIFIER ':' type '=' expr ';'
     {
         // Check if the variable has already been declared
-        auto it = symbol_table.find($2);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($2);
+        if (it != symbolMap.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
             yyerror(error);
             YYABORT;
         }
 
-        symbol_table[$2] = { $4, -1 };
+        symbolMap[$2] = { $4, -1 };
 
         if (strcmp($4, "string") == 0) {
             $$ = new char[strlen($2) + strlen($6.codeString) + 15];
@@ -333,8 +328,8 @@ variable_declaration:
     | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' ';'
     {
         // Check if the variable has already been declared
-        auto it = symbol_table.find($2);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($2);
+        if (it != symbolMap.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
             yyerror(error);
@@ -342,15 +337,15 @@ variable_declaration:
         }
 
         // Insert into symbol table with vector info
-        symbol_table[$2] = { $4, $6 };
+        symbolMap[$2] = { $4, $6 };
         $$ = new char[strlen($2) + strlen($4) + 40];
         sprintf($$, "%s %s[%d];\n", $4, $2, $6);
     }
     | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' '=' '{' expr_list '}' ';'
     {
         // Check if the variable has already been declared
-        auto it = symbol_table.find($2);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($2);
+        if (it != symbolMap.end()) {
             char* error = new char[strlen($2) + 30];
             sprintf(error, "Variable %s already declared", $2);
             yyerror(error);
@@ -364,7 +359,7 @@ variable_declaration:
             YYABORT;
         }
         // Insert into symbol table with vector info
-        symbol_table[$2] = { $4, $6 };
+        symbolMap[$2] = { $4, $6 };
         $$ = new char[strlen($2) + strlen($4) + strlen($10.codeString) + strlen($10.codeString) + 40];
         sprintf($$, "%s %s[%d] = {%s};\n", $4, $2, $6, $10.codeString);
     }
@@ -404,7 +399,7 @@ expr:
     | REAL_LITERAL
     {
         $$.codeString = new char[30];
-        sprintf($$.codeString, "%.17f", $1);
+        sprintf($$.codeString, "%.20f", $1);
         $$.typeString = new char[7];
         strcpy($$.typeString, "double");
     }
@@ -482,8 +477,8 @@ expr:
     {
         $$.codeString = new char[strlen($1) + 1];
         strcpy($$.codeString, $1);
-        auto it = symbol_table.find($1);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($1);
+        if (it != symbolMap.end()) {
             const VInfo &vec_info = it->second;
             $$.typeString = new char[vec_info.type.length() + 1];
             strcpy($$.typeString, vec_info.type.c_str());
@@ -499,8 +494,8 @@ expr:
         $$.codeString = new char[strlen($1) + strlen($3.codeString) + 4];
         sprintf($$.codeString, "%s[%s]", $1, $3.codeString);
 
-        auto it = symbol_table.find($1);
-        if (it != symbol_table.end()) {
+        auto it = symbolMap.find($1);
+        if (it != symbolMap.end()) {
             const VInfo &vec_info = it->second;
             $$.typeString = new char[vec_info.type.length() + 1];
             strcpy($$.typeString, vec_info.type.c_str());
@@ -514,11 +509,11 @@ expr:
     | expr '^' expr
     {
         // Inner product
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
-        if (it1 != symbol_table.end() && it2 != symbol_table.end() && it1->second.length > 0 && it2->second.length > 0) {
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
+        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
             if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = symbol_table[$1.codeString].length;
+                int length = symbolMap[$1.codeString].length;
                 char* temp = new char[10];
                 sprintf(temp, "tmp%d", tmpCounter);
                 char* process = new char[200];
@@ -547,9 +542,9 @@ expr:
     }
     | expr '+' expr
     {
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
-        if (it1 != symbol_table.end() && it2 != symbol_table.end() && it1->second.length > 0 && it2->second.length > 0) {
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
+        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
             if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
                 int length = it1->second.length;
                 char* temp = new char[20];
@@ -566,7 +561,7 @@ expr:
                 }
 
                 // Add the temporary array to the symbol table
-                symbol_table[temp] = { $1.typeString, length };
+                symbolMap[temp] = { $1.typeString, length };
 
                 $$.codeString = new char[strlen(temp) + 1];
                 strcpy($$.codeString, temp);
@@ -595,9 +590,9 @@ expr:
 
     | expr '-' expr
     {
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
-        if (it1 != symbol_table.end() && it2 != symbol_table.end() && it1->second.length > 0 && it2->second.length > 0) {
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
+        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
             if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
                 int length = it1->second.length;
                 char* temp = new char[20];
@@ -614,7 +609,7 @@ expr:
                 }
 
                 // Add the temporary array to the symbol table
-                symbol_table[temp] = { $1.typeString, length };
+                symbolMap[temp] = { $1.typeString, length };
 
                 $$.codeString = new char[strlen(temp) + 1];
                 strcpy($$.codeString, temp);
@@ -642,9 +637,9 @@ expr:
     }
     | expr '*' expr
     {
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
-        if (it1 != symbol_table.end() && it2 != symbol_table.end() && it1->second.length > 0 && it2->second.length > 0) {
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
+        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
             if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
                 int length = it1->second.length;
                 char* temp = new char[20];
@@ -661,7 +656,7 @@ expr:
                 }
 
                 // Add the temporary array to the symbol table
-                symbol_table[temp] = { $1.typeString, length };
+                symbolMap[temp] = { $1.typeString, length };
 
                 $$.codeString = new char[strlen(temp) + 1];
                 strcpy($$.codeString, temp);
@@ -689,9 +684,9 @@ expr:
     }
     | expr '/' expr
     {
-        auto it1 = symbol_table.find($1.codeString);
-        auto it2 = symbol_table.find($3.codeString);
-        if (it1 != symbol_table.end() && it2 != symbol_table.end() && it1->second.length > 0 && it2->second.length > 0) {
+        auto it1 = symbolMap.find($1.codeString);
+        auto it2 = symbolMap.find($3.codeString);
+        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
             if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
                 int length = it1->second.length;
                 char* temp = new char[20];
@@ -708,7 +703,7 @@ expr:
                 }
 
                 // Add the temporary array to the symbol table
-                symbol_table[temp] = { $1.typeString, length };
+                symbolMap[temp] = { $1.typeString, length };
 
                 $$.codeString = new char[strlen(temp) + 1];
                 strcpy($$.codeString, temp);
