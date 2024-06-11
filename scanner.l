@@ -26,7 +26,6 @@ real        {digit}+"."{digit}*
 "if"            { return IF; }  // if關鍵字
 "else"          { return ELSE; }  // else關鍵字
 "while"         { return WHILE; }  // while關鍵字
-"ret"           { return RET; }  // 返回關鍵字
 "println"       { return PRINTLN; }  // 打印行
 "print"         { return PRINT; }  // 打印
 "{"             { return '{'; }  // 左大括號

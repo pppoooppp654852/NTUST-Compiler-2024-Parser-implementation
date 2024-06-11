@@ -156,7 +156,7 @@ char* handleArrayInitialization(const char* lhsCode, const char* lhsType, const 
 %token <doubleValue> REAL_LITERAL
 %token <charValue> CHAR_LITERAL
 %token <string> IDENTIFIER
-%token TRUE FALSE IF ELSE WHILE RET PRINTLN PRINT FUN VAR BOOL CHAR INT REAL STRING
+%token TRUE FALSE IF ELSE WHILE PRINTLN PRINT FUN VAR BOOL CHAR INT REAL STRING
 %token LE GE EQ NE
 
 %type <expressionValue> expression
