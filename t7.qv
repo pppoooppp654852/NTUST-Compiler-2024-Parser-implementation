@@ -5,4 +5,6 @@ fun main () {
 	print( "\n" );
 	print( vi1 + vi2 ); // Dimension-wise addition, output: "{7, 1, 8, 1, 2}"
 	print( "\n" );
+	print( vi1 ^ vi2 ); // 內積運算
+	print( "\n" );
 }

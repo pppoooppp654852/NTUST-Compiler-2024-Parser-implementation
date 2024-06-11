@@ -1,10 +1,7 @@
 fun main () {
     var k: int = 10;
     while (k >= 0) {
-        print(k);
-        if (k != 0) {
-            print(',')
-        }
+        println(k);
         k = k - 1;
     }
 }

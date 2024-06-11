@@ -3,6 +3,6 @@ fun main () {
 	var j: real = 3.1415;
 	var k: int = i + j;
 	var l: real = i + j;
-	print(k);
+	println(k);
 	print(l);
 }

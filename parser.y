@@ -36,13 +36,13 @@ char* generateArrayPrintCode(const char* codeString, const char* typeString, int
     }
 
     if (strcmp(typeString, "int") == 0) {
-        strcat(loopStatement, "%%d\", %s[i]);\n}\nprintf(\"}%s\");\n");
+        strcat(loopStatement, "%%d\", %s[i]);\n}\nprintf(\"}\");\n");
     } else if (strcmp(typeString, "double") == 0) {
-        strcat(loopStatement, "%%f\", %s[i]);\n}\nprintf(\"}%s\");\n");
+        strcat(loopStatement, "%%f\", %s[i]);\n}\nprintf(\"}\");\n");
     } else if (strcmp(typeString, "char") == 0) {
-        strcat(loopStatement, "%%c\", %s[i]);\n}\nprintf(\"}%s\");\n");
+        strcat(loopStatement, "%%c\", %s[i]);\n}\nprintf(\"}\");\n");
     } else {
-        strcat(loopStatement, "%%s\", %s[i]);\n}\nprintf(\"}%s\");\n");
+        strcat(loopStatement, "%%s\", %s[i]);\n}\nprintf(\"}\");\n");
     }
 
     char* newLineString;
@@ -52,7 +52,7 @@ char* generateArrayPrintCode(const char* codeString, const char* typeString, int
         newLineString = "";
     }
     printStatement = new char[strlen(loopStatement) + strlen(codeString) * 2 + strlen(newLineString) + 1];
-    sprintf(printStatement, loopStatement, codeString, codeString, newLineString);
+    sprintf(printStatement, loopStatement, codeString, newLineString);
 
     return printStatement;
 }
@@ -62,13 +62,13 @@ char* generateScalarPrintCode(const char* codeString, const char* typeString, bo
     char* printStatement = new char[strlen(codeString) + 50];
     char* formatString;
     if (strcmp(typeString, "int") == 0) {
-        formatString = "%%d";
+        formatString = "%d";
     } else if (strcmp(typeString, "double") == 0) {
-        formatString = "%%f";
+        formatString = "%f";
     } else if (strcmp(typeString, "char") == 0) {
-        formatString = "%%c";
+        formatString = "%c";
     } else {
-        formatString = "%%s";
+        formatString = "%s";
     }
 
     char* newLineString;
@@ -80,6 +80,57 @@ char* generateScalarPrintCode(const char* codeString, const char* typeString, bo
     sprintf(printStatement, "printf(\"%s%s\", %s);\n", formatString, newLineString, codeString);
 
     return printStatement;
+}
+
+char* handleAssignment(const char* lhsCode, const char* lhsType, const char* rhsCode, const char* rhsType) {
+    auto it1 = symbolMap.find(lhsCode);
+    auto it2 = symbolMap.find(rhsCode);
+
+    if (it1 != symbolMap.end() && it1->second.length > 0) { // 左邊是數組
+        if (it2 != symbolMap.end() && it2->second.length > 0) { // 右邊也是數組
+            if (strcmp(lhsType, rhsType) == 0 && it1->second.length == it2->second.length) {
+                // 數組類型和大小匹配
+                char* arrayAssignment = new char[300];
+                sprintf(arrayAssignment, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it1->second.length, lhsCode, rhsCode);
+                char* result = new char[strlen(arrayAssignment) + 1];
+                strcpy(result, arrayAssignment);
+                return result;
+            } else {
+                yyerror("數組賦值類型或長度不匹配");
+            }
+        } else {
+            yyerror("數組賦值右邊必須是數組");
+        }
+    } else {
+        // 標量賦值
+        char* result = new char[strlen(lhsCode) + strlen(rhsCode) + 5];
+        sprintf(result, "%s = %s;\n", lhsCode, rhsCode);
+        return result;
+    }
+    return NULL;
+}
+
+char* handleArrayInitialization(const char* lhsCode, const char* lhsType, const char* initListCode, int initListLength) {
+    auto it = symbolMap.find(lhsCode);
+    if (it != symbolMap.end() && it->second.length > 0) { // 左邊是數組
+        if (it->second.length >= initListLength) { // 初始化列表適合數組
+            char* tempArrayName = new char[20];
+            sprintf(tempArrayName, "tmp_arr%d", tmpCounter);
+            tmpCounter++;
+            char* declareTempArray = new char[30];
+            char* arrayInitialization = new char[300 + strlen(initListCode)];
+            sprintf(declareTempArray, "%s %s[%d] = {%s};\n", lhsType, tempArrayName, it->second.length, initListCode);
+            sprintf(arrayInitialization, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it->second.length, lhsCode, tempArrayName);
+            char* result = new char[strlen(declareTempArray) + strlen(arrayInitialization) + 1];
+            sprintf(result, "%s%s", declareTempArray, arrayInitialization);
+            return result;
+        } else {
+            yyerror("初始化列表對數組來說太長");
+        }
+    } else {
+        yyerror("數組賦值左邊必須是數組");
+    }
+    return NULL;
 }
 %}
 
@@ -108,12 +159,12 @@ char* generateScalarPrintCode(const char* codeString, const char* typeString, bo
 %token TRUE FALSE IF ELSE WHILE RET PRINTLN PRINT FUN VAR BOOL CHAR INT REAL STRING
 %token LE GE EQ NE
 
-%type <expressionValue> expr
-%type <expressionListValue> expr_list
+%type <expressionValue> expression
+%type <expressionListValue> expression_list
 
 %type <string> function
 %type <string> statements
-%type <string> variable_declaration
+%type <string> declaration
 %type <string> type
 %type <string> statement
 
@@ -157,12 +208,12 @@ statements:
 ;
 
 statement:
-    variable_declaration
+    declaration
     {
         $$ = new char[strlen($1) + 1];
         strcpy($$, $1);
     }
-    | PRINTLN '(' expr ')' ';'
+    | PRINTLN '(' expression ')' ';'
     {
         char* printStatement;  // 打印語句
         auto it = symbolMap.find($3.codeString);
@@ -182,7 +233,7 @@ statement:
             sprintf($$, "%s", printStatement);
         }
     }
-    | PRINT '(' expr ')' ';'
+    | PRINT '(' expression ')' ';'
     {
         char* printStatement;  // 打印語句
         auto it = symbolMap.find($3.codeString);
@@ -202,71 +253,29 @@ statement:
             sprintf($$, "%s", printStatement);
         }
     }
-    | expr '=' expr ';'
+    | expression '=' expression ';'
     {
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-
-        if (it1 != symbolMap.end() && it1->second.length > 0) { // 左邊是數組
-            if (it2 != symbolMap.end() && it2->second.length > 0) { // 右邊也是數組
-                if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                    // 數組類型和大小匹配
-                    char* arrayAssignment = new char[300];
-                    sprintf(arrayAssignment, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it1->second.length, $1.codeString, $3.codeString);
-                    $$ = new char[strlen(arrayAssignment) + 1];
-                    strcpy($$, arrayAssignment);
-                } else {
-                    yyerror("數組賦值類型或長度不匹配");
-                    YYABORT;
-                }
-            } else {
-                yyerror("數組賦值右邊必須是數組");
-                YYABORT;
-            }
-        } else {
-            // 標量賦值
-            $$ = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
-            sprintf($$, "%s = %s;\n", $1.codeString, $3.codeString);
-        }
+        $$ = handleAssignment($1.codeString, $1.typeString, $3.codeString, $3.typeString);
     }
-    | expr '=' '{' expr_list '}' ';'
+    | expression '=' '{' expression_list '}' ';'
     {
-        auto it = symbolMap.find($1.codeString);
-        if (it != symbolMap.end() && it->second.length > 0) { // 左邊是數組
-            if (it->second.length >= $4.length) { // 初始化列表適合數組
-                char* tempArrayName = new char[20];
-                sprintf(tempArrayName, "tmp_arr%d", tmpCounter);
-                tmpCounter++;
-                char* declareTempArray = new char[30];
-                char* arrayInitialization = new char[300 + strlen($4.codeString)];
-                sprintf(declareTempArray, "%s %s[%d] = {%s};\n", $1.typeString, tempArrayName, it->second.length, $4.codeString);
-                sprintf(arrayInitialization, "for (int i = 0; i < %d; ++i) %s[i] = %s[i];\n", it->second.length, $1.codeString, tempArrayName);
-                $$ = new char[strlen(declareTempArray) + strlen(arrayInitialization) + 1];
-                sprintf($$, "%s%s", declareTempArray, arrayInitialization);
-            } else {
-                yyerror("初始化列表對數組來說太長");
-                YYABORT;
-            }
-        } else {
-            yyerror("數組賦值左邊必須是數組");
-            YYABORT;
-        }
+        $$ = handleArrayInitialization($1.codeString, $1.typeString, $4.codeString, $4.length);
     }
-    | IF '(' expr ')' '{' statements '}' %prec UMINUS
+    | IF '(' expression ')' '{' statements '}' %prec UMINUS
     {
         // 構造if語句
         char* ifStatement = new char[strlen($3.codeString) + strlen($6) + 20];
         sprintf(ifStatement, "if (%s) {\n%s}\n", $3.codeString, $6);
         $$ = ifStatement;
     }
-    | IF '(' expr ')' '{' statements '}' ELSE '{' statements '}' %prec UMINUS
+    | IF '(' expression ')' '{' statements '}' ELSE '{' statements '}' %prec UMINUS
     {
         // 構造if-else語句
         char* ifElseStatement = new char[strlen($3.codeString) + strlen($6) + strlen($10) + 30];
         sprintf(ifElseStatement, "if (%s) {\n%s} else {\n%s}\n", $3.codeString, $6, $10);
         $$ = ifElseStatement;
     }
-    | WHILE '(' expr ')' '{' statements '}'
+    | WHILE '(' expression ')' '{' statements '}'
     {
         // 構造while語句
         char* whileStatement = new char[strlen($3.codeString) + strlen($6) + 20];
@@ -281,38 +290,44 @@ statement:
     }
 ;
 
+type:
+    BOOL { $$ = new char[strlen("bool") + 1]; strcpy($$, "bool"); }
+    | CHAR { $$ = new char[strlen("char") + 1]; strcpy($$, "char"); }
+    | INT { $$ = new char[strlen("int") + 1]; strcpy($$, "int"); }
+    | REAL { $$ = new char[strlen("double") + 1]; strcpy($$, "double"); }
+    | STRING { $$ = new char[strlen("string") + 1]; strcpy($$, "string"); }
+;
 
-
-variable_declaration:
+declaration:
     VAR IDENTIFIER ':' type ';'
     {
-        // Check if the variable has already been declared
-        auto it = symbolMap.find($2);
-        if (it != symbolMap.end()) {
-            char* error = new char[strlen($2) + 30];
-            sprintf(error, "Variable %s already declared", $2);
-            yyerror(error);
-            YYABORT;
+        // 檢查變量是否已經聲明
+        auto iter = symbolMap.find($2);
+        if (iter != symbolMap.end()) {
+            char* errorMessage = new char[strlen($2) + 30];
+            sprintf(errorMessage, "變數 %s 已經被聲明", $2);
+            yyerror(errorMessage);
+            YYERROR;
         }
 
         if (strcmp($4, "string") == 0) { 
-            yyerror("String variables must be initialized");
-            YYABORT;
+            yyerror("字符串變量必須初始化");
+            YYERROR;
         }
 
         symbolMap[$2] = { $4, -1 };
         $$ = new char[strlen($2) + strlen($4) + 10];
         sprintf($$, "%s %s;\n", $4, $2);
     }
-    | VAR IDENTIFIER ':' type '=' expr ';'
+    | VAR IDENTIFIER ':' type '=' expression ';'
     {
-        // Check if the variable has already been declared
-        auto it = symbolMap.find($2);
-        if (it != symbolMap.end()) {
-            char* error = new char[strlen($2) + 30];
-            sprintf(error, "Variable %s already declared", $2);
-            yyerror(error);
-            YYABORT;
+        // 檢查變量是否已經聲明
+        auto iter = symbolMap.find($2);
+        if (iter != symbolMap.end()) {
+            char* errorMessage = new char[strlen($2) + 30];
+            sprintf(errorMessage, "變數 %s 已經被聲明", $2);
+            yyerror(errorMessage);
+            YYERROR;
         }
 
         symbolMap[$2] = { $4, -1 };
@@ -327,69 +342,117 @@ variable_declaration:
     }
     | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' ';'
     {
-        // Check if the variable has already been declared
-        auto it = symbolMap.find($2);
-        if (it != symbolMap.end()) {
-            char* error = new char[strlen($2) + 30];
-            sprintf(error, "Variable %s already declared", $2);
-            yyerror(error);
-            YYABORT;
+        // 檢查變量是否已經聲明
+        auto iter = symbolMap.find($2);
+        if (iter != symbolMap.end()) {
+            char* errorMessage = new char[strlen($2) + 30];
+            sprintf(errorMessage, "變數 %s 已經被聲明", $2);
+            yyerror(errorMessage);
+            YYERROR;
         }
 
-        // Insert into symbol table with vector info
+        // 將變量插入符號表，帶有數組信息
         symbolMap[$2] = { $4, $6 };
         $$ = new char[strlen($2) + strlen($4) + 40];
         sprintf($$, "%s %s[%d];\n", $4, $2, $6);
     }
-    | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' '=' '{' expr_list '}' ';'
+    | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' '=' '{' expression_list '}' ';'
     {
-        // Check if the variable has already been declared
-        auto it = symbolMap.find($2);
-        if (it != symbolMap.end()) {
-            char* error = new char[strlen($2) + 30];
-            sprintf(error, "Variable %s already declared", $2);
-            yyerror(error);
-            YYABORT;
+        // 檢查變量是否已經聲明
+        auto iter = symbolMap.find($2);
+        if (iter != symbolMap.end()) {
+            char* errorMessage = new char[strlen($2) + 30];
+            sprintf(errorMessage, "變數 %s 已經被聲明", $2);
+            yyerror(errorMessage);
+            YYERROR;
         }
 
         if ($6 < $10.length) {
-            char* error = new char[strlen($2) + 30];
-            sprintf(error, "Too many elements for %s", $2);
-            yyerror(error);
-            YYABORT;
+            char* errorMessage = new char[strlen($2) + 30];
+            sprintf(errorMessage, "對於 %s 元素太多", $2);
+            yyerror(errorMessage);
+            YYERROR;
         }
-        // Insert into symbol table with vector info
+        // 將變量插入符號表，帶有數組信息
         symbolMap[$2] = { $4, $6 };
-        $$ = new char[strlen($2) + strlen($4) + strlen($10.codeString) + strlen($10.codeString) + 40];
+        $$ = new char[strlen($2) + strlen($4) + strlen($10.codeString) + 40];
         sprintf($$, "%s %s[%d] = {%s};\n", $4, $2, $6, $10.codeString);
     }
 ;
 
-type:
-    BOOL { $$ = new char[strlen("bool") + 1]; strcpy($$, "bool"); }
-    | CHAR { $$ = new char[strlen("char") + 1]; strcpy($$, "char"); }
-    | INT { $$ = new char[strlen("int") + 1]; strcpy($$, "int"); }
-    | REAL { $$ = new char[strlen("double") + 1]; strcpy($$, "double"); }
-    | STRING { $$ = new char[strlen("string") + 1]; strcpy($$, "string"); }
-;
-
-expr_list:
-    expr
+expression_list:
+    expression
     {
+        // 單個表達式
         $$.codeString = new char[strlen($1.codeString) + 1];
         sprintf($$.codeString, "%s", $1.codeString);
-        $$.length = 1;
+        $$.length = 1;  // 初始化長度為1
     }
-    | expr_list ',' expr
+    | expression_list ',' expression
     {
+        // 表達式列表
         $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
         sprintf($$.codeString, "%s, %s", $1.codeString, $3.codeString);
-        $$.length = $1.length + 1;
+        $$.length = $1.length + 1;  // 更新列表長度
     }
 ;
 
-expr:
-    INTEGER_LITERAL
+expression:
+    IDENTIFIER
+    {
+        // 變量標識符
+        $$.codeString = new char[strlen($1) + 1];
+        strcpy($$.codeString, $1);
+
+        // 在符號表中查找變量
+        auto iter = symbolMap.find($1);
+        if (iter != symbolMap.end()) {
+            const VInfo &varInfo = iter->second;
+            $$.typeString = new char[varInfo.type.length() + 1];
+            strcpy($$.typeString, varInfo.type.c_str());
+        } else {
+            // 變量未聲明錯誤
+            char* errorMessage = new char[strlen($1) + 20];
+            sprintf(errorMessage, "未聲明的變量 %s", $1);
+            yyerror(errorMessage);
+            YYERROR;
+        }
+    }
+    | IDENTIFIER '[' expression ']'
+    {
+        // 數組變量標識符
+        $$.codeString = new char[strlen($1) + strlen($3.codeString) + 4];
+        sprintf($$.codeString, "%s[%s]", $1, $3.codeString);
+
+        // 在符號表中查找變量
+        auto iter = symbolMap.find($1);
+        if (iter != symbolMap.end()) {
+            const VInfo &varInfo = iter->second;
+            $$.typeString = new char[varInfo.type.length() + 1];
+            strcpy($$.typeString, varInfo.type.c_str());
+        } else {
+            // 變量未聲明錯誤
+            char* errorMessage = new char[strlen($1) + 20];
+            sprintf(errorMessage, "未聲明的變量 %s", $1);
+            yyerror(errorMessage);
+            YYERROR;
+        }
+    }
+    | TRUE
+    {
+        $$.codeString = new char[6];
+        strcpy($$.codeString, "true");
+        $$.typeString = new char[5];
+        strcpy($$.typeString, "bool");
+    }
+    | FALSE
+    {
+        $$.codeString = new char[6];
+        strcpy($$.codeString, "false");
+        $$.typeString = new char[5];
+        strcpy($$.typeString, "bool");
+    }
+    | INTEGER_LITERAL
     {
         $$.codeString = new char[20];
         sprintf($$.codeString, "%d", $1);
@@ -417,167 +480,123 @@ expr:
         $$.typeString = new char[7];
         strcpy($$.typeString, "string");
     }
-    | TRUE
-    {
-        $$.codeString = new char[6];
-        strcpy($$.codeString, "true");
-        $$.typeString = new char[5];
-        strcpy($$.typeString, "bool");
-    }
-    | FALSE
-    {
-        $$.codeString = new char[6];
-        strcpy($$.codeString, "false");
-        $$.typeString = new char[5];
-        strcpy($$.typeString, "bool");
-    }
-    | expr '<' expr
-    {
-        $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
-        sprintf($$.codeString, "%s < %s", $1.codeString, $3.codeString);
-        $$.typeString = new char[5];
-        strcpy($$.typeString, "bool");
-    }
-    | expr '>' expr
-    {
-        $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
-        sprintf($$.codeString, "%s > %s", $1.codeString, $3.codeString);
-        $$.typeString = new char[5];
-        strcpy($$.typeString, "bool");
-    }
-    | expr EQ expr
+    | expression EQ expression
     {
         $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
         sprintf($$.codeString, "%s == %s", $1.codeString, $3.codeString);
         $$.typeString = new char[5];
         strcpy($$.typeString, "bool");
     }
-    | expr NE expr
+    | expression NE expression
     {
         $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
         sprintf($$.codeString, "%s != %s", $1.codeString, $3.codeString);
         $$.typeString = new char[5];
         strcpy($$.typeString, "bool");
     }
-    | expr LE expr
+    | expression LE expression
     {
         $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
         sprintf($$.codeString, "%s <= %s", $1.codeString, $3.codeString);
         $$.typeString = new char[5];
         strcpy($$.typeString, "bool");
     }
-    | expr GE expr
+    | expression GE expression
     {
         $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 5];
         sprintf($$.codeString, "%s >= %s", $1.codeString, $3.codeString);
         $$.typeString = new char[5];
         strcpy($$.typeString, "bool");
     }
-    | IDENTIFIER
+    | expression '<' expression
     {
-        $$.codeString = new char[strlen($1) + 1];
-        strcpy($$.codeString, $1);
-        auto it = symbolMap.find($1);
-        if (it != symbolMap.end()) {
-            const VInfo &vec_info = it->second;
-            $$.typeString = new char[vec_info.type.length() + 1];
-            strcpy($$.typeString, vec_info.type.c_str());
-        } else {
-            char* error = new char[strlen($1) + 20];
-            sprintf(error, "Undeclared variable %s", $1);
-            yyerror(error);
-            YYABORT;
-        }
+        $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
+        sprintf($$.codeString, "%s < %s", $1.codeString, $3.codeString);
+        $$.typeString = new char[5];
+        strcpy($$.typeString, "bool");
     }
-    | IDENTIFIER '[' expr ']'
+    | expression '>' expression
     {
-        $$.codeString = new char[strlen($1) + strlen($3.codeString) + 4];
-        sprintf($$.codeString, "%s[%s]", $1, $3.codeString);
-
-        auto it = symbolMap.find($1);
-        if (it != symbolMap.end()) {
-            const VInfo &vec_info = it->second;
-            $$.typeString = new char[vec_info.type.length() + 1];
-            strcpy($$.typeString, vec_info.type.c_str());
-        } else {
-            char* error = new char[strlen($1) + 20];
-            sprintf(error, "Undeclared variable %s", $1);
-            yyerror(error);
-            YYABORT;
-        }
+        $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
+        sprintf($$.codeString, "%s > %s", $1.codeString, $3.codeString);
+        $$.typeString = new char[5];
+        strcpy($$.typeString, "bool");
     }
-    | expr '^' expr
+    
+    | expression '^' expression
     {
-        // Inner product
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
-            if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = symbolMap[$1.codeString].length;
-                char* temp = new char[10];
-                sprintf(temp, "tmp%d", tmpCounter);
-                char* process = new char[200];
+        // 內積計算
+        auto iter1 = symbolMap.find($1.codeString);
+        auto iter2 = symbolMap.find($3.codeString);
+        if (iter1 != symbolMap.end() && iter2 != symbolMap.end() && iter1->second.length > 0 && iter2->second.length > 0) {
+            if (strcmp($1.typeString, $3.typeString) == 0 && iter1->second.length == iter2->second.length) {
+                int vecLength = symbolMap[$1.codeString].length;
+                char* tempVar = new char[10];
+                sprintf(tempVar, "tmp%d", tmpCounter);
+                char* innerProductCode = new char[200];
                 if (!i_flag) {
                     i_flag = true;
-                    sprintf(process, "int i;\n%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, temp, length, temp, $1.codeString, $3.codeString);
+                    sprintf(innerProductCode, "int i;\n%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, tempVar, vecLength, tempVar, $1.codeString, $3.codeString);
                 } else {
-                    sprintf(process, "%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, temp, length, temp, $1.codeString, $3.codeString);
+                    sprintf(innerProductCode, "%s %s = 0;\nfor (i = 0; i < %d; i++) %s += %s[i] * %s[i];", $1.typeString, tempVar, vecLength, tempVar, $1.codeString, $3.codeString);
                 }
                 tmpCounter++;
 
-                $$.codeString = new char[strlen(temp) + 1];
-                strcpy($$.codeString, temp);
+                $$.codeString = new char[strlen(tempVar) + 1];
+                strcpy($$.codeString, tempVar);
                 $$.typeString = new char[strlen($1.typeString) + 1];
                 strcpy($$.typeString, $1.typeString);
-                $$.processString = new char[strlen(process) + 1];
-                $$.processString = process;
+                $$.processString = new char[strlen(innerProductCode) + 1];
+                strcpy($$.processString, innerProductCode);
             } else {
-                yyerror("Mismatched types or lengths in vector addition");
-                YYABORT;
+                yyerror("向量加法類型或長度不匹配");
+                YYERROR;
             }
         } else {
-            yyerror("Inner product on non-array object");
-            YYABORT;
+            yyerror("內積運算對象不是數組");
+            YYERROR;
         }
     }
-    | expr '+' expr
+    | expression '+' expression
     {
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
-            if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = it1->second.length;
-                char* temp = new char[20];
-                sprintf(temp, "tmp_arr%d", tmpCounter);
+        // 向量加法
+        auto iter1 = symbolMap.find($1.codeString);
+        auto iter2 = symbolMap.find($3.codeString);
+        if (iter1 != symbolMap.end() && iter2 != symbolMap.end() && iter1->second.length > 0 && iter2->second.length > 0) {
+            if (strcmp($1.typeString, $3.typeString) == 0 && iter1->second.length == iter2->second.length) {
+                int vecLength = iter1->second.length;
+                char* tempVar = new char[20];
+                sprintf(tempVar, "tmp_arr%d", tmpCounter);
                 tmpCounter++;
 
-                // Generate the addition process codeString
-                char* process = new char[300 + 20 * length];
+                // 生成加法的過程代碼
+                char* additionProcess = new char[300 + 20 * vecLength];
                 if (!i_flag) {
                     i_flag = true;
-                    sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(additionProcess, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 } else {
-                    sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(additionProcess, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] + %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 }
 
-                // Add the temporary array to the symbol table
-                symbolMap[temp] = { $1.typeString, length };
+                // 將臨時數組添加到符號表
+                symbolMap[tempVar] = { $1.typeString, vecLength };
 
-                $$.codeString = new char[strlen(temp) + 1];
-                strcpy($$.codeString, temp);
+                $$.codeString = new char[strlen(tempVar) + 1];
+                strcpy($$.codeString, tempVar);
                 $$.typeString = new char[strlen($1.typeString) + 1];
                 strcpy($$.typeString, $1.typeString);
-                $$.processString = new char[strlen(process) + 1];
-                strcpy($$.processString, process);
+                $$.processString = new char[strlen(additionProcess) + 1];
+                strcpy($$.processString, additionProcess);
             } else {
-                yyerror("Mismatched types or lengths in vector addition");
-                YYABORT;
+                yyerror("向量加法類型或長度不匹配");
+                YYERROR;
             }
-            
         } else {
+            // 標量加法
             $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
             sprintf($$.codeString, "%s + %s", $1.codeString, $3.codeString);
-            // Type checking logic to determine the result type
+
+            // 類型檢查邏輯來確定結果類型
             if (strcmp($1.typeString, "int") == 0 && strcmp($3.typeString, "int") == 0) {
                 $$.typeString = new char[4];
                 strcpy($$.typeString, "int");
@@ -587,45 +606,46 @@ expr:
             }
         }
     }
-
-    | expr '-' expr
+    | expression '-' expression
     {
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
-            if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = it1->second.length;
-                char* temp = new char[20];
-                sprintf(temp, "tmp_arr%d", tmpCounter);
+        // 向量減法
+        auto iter1 = symbolMap.find($1.codeString);
+        auto iter2 = symbolMap.find($3.codeString);
+        if (iter1 != symbolMap.end() && iter2 != symbolMap.end() && iter1->second.length > 0 && iter2->second.length > 0) {
+            if (strcmp($1.typeString, $3.typeString) == 0 && iter1->second.length == iter2->second.length) {
+                int vecLength = iter1->second.length;
+                char* tempVar = new char[20];
+                sprintf(tempVar, "tmp_arr%d", tmpCounter);
                 tmpCounter++;
 
-                // Generate the addition process codeString
-                char* process = new char[300 + 20 * length];
+                // 生成減法的過程代碼
+                char* subtractionProcess = new char[300 + 20 * vecLength];
                 if (!i_flag) {
                     i_flag = true;
-                    sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(subtractionProcess, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 } else {
-                    sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(subtractionProcess, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] - %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 }
 
-                // Add the temporary array to the symbol table
-                symbolMap[temp] = { $1.typeString, length };
+                // 將臨時數組添加到符號表
+                symbolMap[tempVar] = { $1.typeString, vecLength };
 
-                $$.codeString = new char[strlen(temp) + 1];
-                strcpy($$.codeString, temp);
+                $$.codeString = new char[strlen(tempVar) + 1];
+                strcpy($$.codeString, tempVar);
                 $$.typeString = new char[strlen($1.typeString) + 1];
                 strcpy($$.typeString, $1.typeString);
-                $$.processString = new char[strlen(process) + 1];
-                strcpy($$.processString, process);
+                $$.processString = new char[strlen(subtractionProcess) + 1];
+                strcpy($$.processString, subtractionProcess);
             } else {
-                yyerror("Mismatched types or lengths in vector addition");
-                YYABORT;
+                yyerror("向量減法類型或長度不匹配");
+                YYERROR;
             }
-            
         } else {
+            // 標量減法
             $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
             sprintf($$.codeString, "%s - %s", $1.codeString, $3.codeString);
-            // Type checking logic to determine the result type
+
+            // 類型檢查邏輯來確定結果類型
             if (strcmp($1.typeString, "int") == 0 && strcmp($3.typeString, "int") == 0) {
                 $$.typeString = new char[4];
                 strcpy($$.typeString, "int");
@@ -635,44 +655,46 @@ expr:
             }
         }
     }
-    | expr '*' expr
+    | expression '*' expression
     {
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
-            if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = it1->second.length;
-                char* temp = new char[20];
-                sprintf(temp, "tmp_arr%d", tmpCounter);
+        // 向量乘法
+        auto iter1 = symbolMap.find($1.codeString);
+        auto iter2 = symbolMap.find($3.codeString);
+        if (iter1 != symbolMap.end() && iter2 != symbolMap.end() && iter1->second.length > 0 && iter2->second.length > 0) {
+            if (strcmp($1.typeString, $3.typeString) == 0 && iter1->second.length == iter2->second.length) {
+                int vecLength = iter1->second.length;
+                char* tempVar = new char[20];
+                sprintf(tempVar, "tmp_arr%d", tmpCounter);
                 tmpCounter++;
 
-                // Generate the addition process codeString
-                char* process = new char[300 + 20 * length];
+                // 生成乘法的過程代碼
+                char* multiplicationProcess = new char[300 + 20 * vecLength];
                 if (!i_flag) {
                     i_flag = true;
-                    sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(multiplicationProcess, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 } else {
-                    sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(multiplicationProcess, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] * %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 }
 
-                // Add the temporary array to the symbol table
-                symbolMap[temp] = { $1.typeString, length };
+                // 將臨時數組添加到符號表
+                symbolMap[tempVar] = { $1.typeString, vecLength };
 
-                $$.codeString = new char[strlen(temp) + 1];
-                strcpy($$.codeString, temp);
+                $$.codeString = new char[strlen(tempVar) + 1];
+                strcpy($$.codeString, tempVar);
                 $$.typeString = new char[strlen($1.typeString) + 1];
                 strcpy($$.typeString, $1.typeString);
-                $$.processString = new char[strlen(process) + 1];
-                strcpy($$.processString, process);
+                $$.processString = new char[strlen(multiplicationProcess) + 1];
+                strcpy($$.processString, multiplicationProcess);
             } else {
-                yyerror("Mismatched types or lengths in vector addition");
-                YYABORT;
+                yyerror("向量乘法類型或長度不匹配");
+                YYERROR;
             }
-            
         } else {
+            // 標量乘法
             $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
             sprintf($$.codeString, "%s * %s", $1.codeString, $3.codeString);
-            // Type checking logic to determine the result type
+
+            // 類型檢查邏輯來確定結果類型
             if (strcmp($1.typeString, "int") == 0 && strcmp($3.typeString, "int") == 0) {
                 $$.typeString = new char[4];
                 strcpy($$.typeString, "int");
@@ -682,48 +704,50 @@ expr:
             }
         }
     }
-    | expr '/' expr
+    | expression '/' expression
     {
-        auto it1 = symbolMap.find($1.codeString);
-        auto it2 = symbolMap.find($3.codeString);
-        if (it1 != symbolMap.end() && it2 != symbolMap.end() && it1->second.length > 0 && it2->second.length > 0) {
-            if (strcmp($1.typeString, $3.typeString) == 0 && it1->second.length == it2->second.length) {
-                int length = it1->second.length;
-                char* temp = new char[20];
-                sprintf(temp, "tmp_arr%d", tmpCounter);
+        // 向量除法
+        auto iter1 = symbolMap.find($1.codeString);
+        auto iter2 = symbolMap.find($3.codeString);
+        if (iter1 != symbolMap.end() && iter2 != symbolMap.end() && iter1->second.length > 0 && iter2->second.length > 0) {
+            if (strcmp($1.typeString, $3.typeString) == 0 && iter1->second.length == iter2->second.length) {
+                int vecLength = iter1->second.length;
+                char* tempVar = new char[20];
+                sprintf(tempVar, "tmp_arr%d", tmpCounter);
                 tmpCounter++;
 
-                // Generate the addition process codeString
-                char* process = new char[300 + 20 * length];
+                // 生成除法的過程代碼
+                char* divisionProcess = new char[300 + 20 * vecLength];
                 if (!i_flag) {
                     i_flag = true;
-                    sprintf(process, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(divisionProcess, "int i;\n%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 } else {
-                    sprintf(process, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, temp, length, length, temp, $1.codeString, $3.codeString);
+                    sprintf(divisionProcess, "%s %s[%d];\nfor (i = 0; i < %d; ++i) %s[i] = %s[i] / %s[i];", $1.typeString, tempVar, vecLength, vecLength, tempVar, $1.codeString, $3.codeString);
                 }
 
-                // Add the temporary array to the symbol table
-                symbolMap[temp] = { $1.typeString, length };
+                // 將臨時數組添加到符號表
+                symbolMap[tempVar] = { $1.typeString, vecLength };
 
-                $$.codeString = new char[strlen(temp) + 1];
-                strcpy($$.codeString, temp);
+                $$.codeString = new char[strlen(tempVar) + 1];
+                strcpy($$.codeString, tempVar);
                 $$.typeString = new char[strlen($1.typeString) + 1];
                 strcpy($$.typeString, $1.typeString);
-                $$.processString = new char[strlen(process) + 1];
-                strcpy($$.processString, process);
+                $$.processString = new char[strlen(divisionProcess) + 1];
+                strcpy($$.processString, divisionProcess);
             } else {
-                yyerror("Mismatched types or lengths in vector addition");
-                YYABORT;
+                yyerror("向量除法類型或長度不匹配");
+                YYERROR;
             }
-            
         } else {
+            // 標量除法
             if ($3.codeString[0] == '0') {
-                yyerror("Division by zero");
-                YYABORT;
+                yyerror("除以零錯誤");
+                YYERROR;
             }
             $$.codeString = new char[strlen($1.codeString) + strlen($3.codeString) + 4];
             sprintf($$.codeString, "%s / %s", $1.codeString, $3.codeString);
-            // Type checking logic to determine the result type
+
+            // 類型檢查邏輯來確定結果類型
             if (strcmp($1.typeString, "int") == 0 && strcmp($3.typeString, "int") == 0) {
                 $$.typeString = new char[4];
                 strcpy($$.typeString, "int");
@@ -733,14 +757,14 @@ expr:
             }
         }
     }
-    | '-' expr %prec UMINUS
+    | '-' expression %prec UMINUS
     {
         $$.codeString = new char[strlen($2.codeString) + 2];
         sprintf($$.codeString, "-%s", $2.codeString);
         $$.typeString = new char[strlen($2.typeString) + 1];
         strcpy($$.typeString, $2.typeString);
     }
-    | '(' expr ')'
+    | '(' expression ')'
     {
         $$.codeString = new char[strlen($2.codeString) + 3];
         sprintf($$.codeString, "(%s)", $2.codeString);
@@ -748,11 +772,6 @@ expr:
         strcpy($$.typeString, $2.typeString);
     }
 ;
-
-
-
-
-
 
 %%
 
