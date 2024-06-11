@@ -1,3 +1,4 @@
+// test1.qv
 fun main () {
 	var i: int;
 	i = 10;

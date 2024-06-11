@@ -48,7 +48,7 @@ bool is_i_declared = false;
 %token <cval> CHAR_LITERAL
 %token <sval> STRING_LITERAL
 %token <str> IDENTIFIER
-%token FUN VAR VAL BOOL CHAR INT REAL TRUE FALSE CLASS IF ELSE FOR WHILE DO SWITCH CASE RET PRINTLN PRINT
+%token FUN VAR VAL BOOL CHAR INT REAL STRING TRUE FALSE CLASS IF ELSE FOR WHILE DO SWITCH CASE RET PRINTLN PRINT
 %token EQ NE LE GE AND OR
 
 %type <expr_val> expr
@@ -322,6 +322,11 @@ variable_declaration:
             YYABORT;
         }
 
+        if (strcmp($4, "string") == 0) { 
+            yyerror("String variables must be initialized", lineNum);
+            YYABORT;
+        }
+
         symbol_table[$2] = { $4, -1 };
         $$ = new char[strlen($2) + strlen($4) + 10];
         sprintf($$, "%s %s;\n", $4, $2);
@@ -338,8 +343,14 @@ variable_declaration:
         }
 
         symbol_table[$2] = { $4, -1 };
-        $$ = new char[strlen($2) + strlen($4) + strlen($6.code) + 15];
-        sprintf($$, "%s %s = %s;\n", $4, $2, $6.code);
+
+        if (strcmp($4, "string") == 0) {
+            $$ = new char[strlen($2) + strlen($6.code) + 15];
+            sprintf($$, "char %s[] = %s;\n", $2, $6.code);
+        } else {
+            $$ = new char[strlen($2) + strlen($4) + strlen($6.code) + 15];
+            sprintf($$, "%s %s = %s;\n", $4, $2, $6.code);
+        }
     }
     | VAR IDENTIFIER ':' type '[' INTEGER_LITERAL ']' ';'
     {
@@ -386,6 +397,7 @@ type:
     | CHAR { $$ = new char[strlen("char") + 1]; strcpy($$, "char"); }
     | INT { $$ = new char[strlen("int") + 1]; strcpy($$, "int"); }
     | REAL { $$ = new char[strlen("double") + 1]; strcpy($$, "double"); }
+    | STRING { $$ = new char[strlen("string") + 1]; strcpy($$, "string"); }
 ;
 
 expr_list:

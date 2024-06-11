@@ -1,3 +1,14 @@
+//test16.qv
 fun main () {
-    println("Hello compiler");
+    var i: int = 10;
+    var j: int = 5;
+    if (i >= j) {
+        println("true");
+    } else {
+        println("false");
+    }
+
+    if (true) {
+        println("true");
+    }
 }

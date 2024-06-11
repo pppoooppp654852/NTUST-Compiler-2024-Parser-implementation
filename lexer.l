@@ -35,6 +35,7 @@ real        {digit}+"."{digit}*
 "char"          { return CHAR; }
 "int"           { return INT; }
 "real"          { return REAL; }
+"string"        { return STRING; }
 "true"          { return TRUE; }
 "false"         { return FALSE; }
 "class"         { return CLASS; }

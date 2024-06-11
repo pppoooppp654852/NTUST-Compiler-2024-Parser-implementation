@@ -1,6 +1,11 @@
+// test2.qv
 fun main () {
 	var i: int = 10;
 	var j: real = 3.12;
+	var k: char = 'c';
+	var s: string = "Hello, compiler!";
 	println(i);
-	print(j);
+	println(j);
+	println(k);
+	println(s);
 }

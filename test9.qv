@@ -1,6 +1,8 @@
+//test9.qv
 fun main () {
 	var vi1: real[5] = {5, 3, 4, 1, 2};
 	var vi2: real[3] = {2, -2, 4};
-	print( vi1 * vi2 ); // yyerror("ERROR: mismatched size")
+	// yyerror("ERROR: mismatched size")
+	print( vi1 * vi2 ); 
   	print( "\n" );
 }

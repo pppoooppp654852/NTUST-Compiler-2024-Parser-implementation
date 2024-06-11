@@ -1,5 +1,7 @@
+//test15.qv
 fun main () {
     var l: int[5];
-    l = {1, 2, 3, 4, 5, 6};   // Error: too many elements on the right hand side
+    // Error: too many elements
+    l = {1, 2, 3, 4, 5, 6};   
     println(l);
 }
